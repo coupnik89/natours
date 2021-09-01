@@ -4,8 +4,8 @@ const Tour = require('../Models/tour')
 const APIFeatures = require('../utils/APIFeatures')
 const AppError = require('../utils/AppError')
 const catchAsync = require('../utils/catchAsync')
-
-const factory = require('../controllers/handlerFactory')
+const multer = require('multer')
+const sharp = require('sharp')
 
 // exports.checkId = async (req, res, next, val) => {
 //     console.log(`Tour id is: ${val}`);
@@ -22,6 +22,62 @@ const factory = require('../controllers/handlerFactory')
 
 //     next()
 // }
+
+const multerStorage = multer.memoryStorage()
+
+const multerFilter = (req, file, cb) => {
+    if(file.mimetype.startsWith('image')) {
+        cb(null, true)
+    } else {
+        cb(new AppError(400, 'Not an image. Please upload image only.'), false)
+    }
+}
+
+const upload = multer({
+    storage: multerStorage,
+    fileFilter: multerFilter
+})
+
+// upload.single('photo') FROM middleware: req.file
+// upload.array('images', 5) FROM middleware: req.files
+
+// Mix
+exports.uploadTourImages = upload.fields([
+    {name: 'imageCover', maxCount: 1},
+    {name: 'images', maxCount: 3}
+])
+
+exports.resizeTourImages = catchAsync(async (req, res, next) => {
+    if(!req.files.imageCover || !req.files.images) return next()
+
+    // 1) Processing cover image
+    const imageCoverFileName = `tour-${req.params.id}-${Date.now()}-cover.jpeg`
+    await sharp(req.files.imageCover[0].buffer)
+        .resize(2000, 1333)
+        .toFormat('jpeg')
+        .jpeg({ quality: 90 })
+        .toFile(`public/img/tours/${imageCoverFileName}`)
+
+    req.body.imageCover = imageCoverFileName
+
+    req.body.images = []
+
+    await Promise.all(req.files.images.map(async (file, i) => {
+        const filename = `tour-${req.params.id}-${Date.now()}-${i + 1}.jpeg`
+
+        await sharp(file.buffer)
+            .resize(2000, 1333)
+            .toFormat('jpeg')
+            .jpeg({ quality: 90 })
+            .toFile(`public/img/tours/${filename}`)
+
+        req.body.images.push(filename)
+    }))
+
+    // 2) Processing images in array
+
+    next()
+})
 
 exports.getStats = async (req, res, next) => {
     const year = req.params.year

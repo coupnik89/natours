@@ -17,7 +17,7 @@ block content
                         p.card__text #{tour.summary}
                         .card__data
                             svg.card__icon
-                                use(xlink:href='/img/icons.svg#icon-map-pin')
+                                use(xlink:href='/img/icons.svg#icon-map-pin' nonce=`${nonce}`)
                             span #{tour.startLocation.description}
                         .card__data
                             svg.card__icon

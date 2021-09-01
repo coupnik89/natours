@@ -14,8 +14,6 @@ html
         //- HEADER
         include _header
 
-        include partials/_msg.pug
-
         //- CONTENT
         block content   
             h1 THIS IS THE BASE PLACE HOLDER
@@ -25,4 +23,9 @@ html
 
         //- For parcel
         //- script(src='index.js')
-        script(src='main.js')
+        //- script(src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js") 
+        //- script(src='/js/mapbox.js')
+        //- script(src='/js/login.js')
+        script(src='/index.js')
+        script(nonce=`${nonce}`).
+            console.log('I hate this')

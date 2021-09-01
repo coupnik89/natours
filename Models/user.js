@@ -24,7 +24,8 @@ const userSchema = new mongoose.Schema({
         validate: [validator.isEmail, 'Please provide a valid email']
     },
     photo: {
-        type: String
+        type: String,
+        default: 'default.jpg'
     },
     role: {
         type: String,
@@ -93,8 +94,6 @@ userSchema.methods.generateAuthToken = function(expires = '30d') {
 userSchema.methods.isPwChangedAfterTknIssued = function(JWTTimestamp) {
     if(this.passwordChangedAt) {
         const changedTimeStamp = this.passwordChangedAt.getTime() / 1000
-
-        console.log(changedTimeStamp , JWTTimestamp)
 
         return JWTTimestamp < changedTimeStamp
     }

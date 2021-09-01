@@ -1,10 +1,8 @@
 const express = require('express')
-
 const router = express.Router()
 
 const userController = require('../controllers/user')
 const authController = require('../controllers/auth')
-
 
 router.get('/something', (req, res, next) => {
     res.status(200).json({
@@ -15,6 +13,7 @@ router.get('/something', (req, res, next) => {
 })
 router.post('/signup', authController.signup)
 router.post('/login', authController.login)
+router.get('/logout', authController.logout)
 router.post('/forgotPassword', authController.forgotPassword)
 
 router.patch('/resetPassword/:token', authController.resetPassword)
@@ -24,8 +23,12 @@ router.use(authController.authenticate)
 
 router.patch('/updatePassword', authController.updatePassword)
 
-router.get('/currentUser', userController.getSelf, userController.getUser)
-router.patch('/updateSelf', userController.updateSelf)
+router.get('/currentUser', userController.getSelf)
+router.patch(
+    '/updateSelf', 
+    userController.uploadUserPhoto, 
+    userController.resizePhoto,
+    userController.updateSelf)
 router.delete('/deleteSelf', userController.deleteSelf)
 
 router.route('/')

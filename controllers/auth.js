@@ -3,7 +3,7 @@ const catchAsync = require('../utils/catchAsync')
 const _ = require('lodash')
 const AppError = require('../utils/AppError')
 
-const sendEmail = require('../utils/email')
+const Email = require('../utils/email')
 const setCookie = require('../utils/setCookie')
 
 exports.signup = catchAsync(async (req, res, next) => {
@@ -11,6 +11,11 @@ exports.signup = catchAsync(async (req, res, next) => {
     const newUser = await User.create(allowInputs)
 
     const token = newUser.generateAuthToken(process.env.JWT_EXPIRES)
+
+    const url = `${req.protocol}://${req.get('host')}/me`
+    console.log(url)
+
+    await new Email(newUser, url).sendWelcome()
 
     setCookie(res, token)
 
@@ -33,17 +38,26 @@ exports.login = catchAsync(async (req, res, next) => {
 
     const user = await User.findByCredentials(email, password)
 
-    if (!user) return next(new AppError(401, 'Incorrect email or password'))
+    if (!user) return next(new AppError(400, 'Incorrect email or password'))
 
     const token = user.generateAuthToken(process.env.JWT_EXPIRES)
 
     setCookie(res, token)
 
-    res.status(200).json({
-        status: 'success',
-        token
-    })
+    if (req.originalUrl.startsWith('/api')) {
+        return res.status(200).json({
+            status: 'success',
+            token
+        })
+    }
+
+    res.status(200).redirect('/')
 })
+
+exports.logout = (req, res) => {
+    res.clearCookie('jwt');
+    res.redirect('/login')
+}
 
 exports.authenticate = catchAsync(async (req, res, next) => {
     // 1) Get the token and check if it's there 
@@ -68,6 +82,7 @@ exports.authenticate = catchAsync(async (req, res, next) => {
 
     // Grant access to protected route
     req.user = currentUser
+    res.locals.user = currentUser
     next()
 })
 
@@ -101,19 +116,16 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
         validateBeforeSave: false
     })
 
-    // Send a link to the user's email
-    const resetURL = `${req.protocol}://${req.get('host')}/api/v1/users/reset-password/${resetToken}`
-
-    const message = `Forgot your password? Please follow the link to reset your password. ${resetURL}
-    \n If you did not request to reset your password please disgard this email.
-    `
-
     try {
-        await sendEmail({
-            email: user.email,
-            subject: 'Password Reset: This link will be invalid after 10 minutes.',
-            message
-        })
+        // await sendEmail({
+        //     email: user.email,
+        //     subject: 'Password Reset: This link will be invalid after 10 minutes.',
+        //     message
+        // })
+        // Send a link to the user's email
+        const resetURL = `${req.protocol}://${req.get('host')}/api/v1/users/resetPassword/${resetToken}`
+        
+        await new Email(user, resetURL).sendPasswordReset()
 
         res.status(200).json({
             status: 'success',
@@ -139,11 +151,14 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
 exports.resetPassword = catchAsync(async (req, res, next) => {
     const resetToken = req.params.token
     const isVerify = await User.verifyToken(resetToken)
-    const user = await User.findOne({ _id: isVerify._id, passwordResetExpires: {
-        $gt: Date.now()
-    }})
+    const user = await User.findOne({
+        _id: isVerify._id,
+        passwordResetExpires: {
+            $gt: Date.now()
+        }
+    })
 
-    if(!user) return next(new AppError(400, 'Token is invalid ot has expired'))
+    if (!user) return next(new AppError(400, 'Token is invalid or has expired'))
 
     user.password = req.body.password
     user.passwordConfirm = req.body.passwordConfirm
@@ -164,20 +179,25 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
 
 exports.updatePassword = catchAsync(async (req, res, next) => {
     // Get user 
-    const user = await User.findOne({ _id: req.user._id })
+    const user = await User.findOne({
+        _id: req.user._id
+    })
 
     // Check if posted pw is correct
-    const isUser = await User.findByCredentials(user.email, req.body.password)
+    const isUser = await User.findByCredentials(user.email, req.body.passwordCurrent)
 
-    if(!isUser) return next(new AppError(401, 'Incorrect crudentials'))
-    
+    if (!isUser) return next(new AppError(401, 'Incorrect crudentials'))
+
     // If so, update the pw
-    user.password = req.body.newPassword
-    user.passwordConfirm = req.body.newPasswordConfirm
+    user.password = req.body.password
+    user.passwordConfirm = req.body.passwordConfirm
 
     await user.save()
 
     const token = user.generateAuthToken()
+
+    res.clearCookie('jwt')
+    setCookie(res, token)
 
     // Send Token
     res.status(200).json({

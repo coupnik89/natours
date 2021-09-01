@@ -50,7 +50,7 @@ exports.getTour = catchAsync(async (req, res, next) => {
 exports.getReviews = catchAsync(async (req, res, next) => {
     let filter = {}
 
-    if(req.params.tourId) filter = { tour: req.params.tourId }
+    if(req.params.id) filter = { tour: req.params.id }
 
     const reviews = await Review.find(filter)
 

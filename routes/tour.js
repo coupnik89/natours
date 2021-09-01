@@ -10,7 +10,9 @@ const {
     deleteTour,
     getStats,
     getToursWithin,
-    getDistances
+    getDistances,
+    resizeTourImages,
+    uploadTourImages
 } = require('../controllers/tour')
 const {
     getAffordableTours
@@ -46,7 +48,12 @@ router.route('/tours-within/:distance/center/:latlng/unit/:unit')
 
 router.route('/:id')
     .get(getTour)
-    .patch(authenticate, restrictTo('admin', 'lead-guide'), updateTour)
+    .patch(
+        authenticate, 
+        restrictTo('admin', 'lead-guide'), 
+        uploadTourImages,
+        resizeTourImages,
+        updateTour)
     .delete(authenticate, restrictTo('admin', 'lead-guide'), deleteTour)
 
 

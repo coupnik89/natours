@@ -4,9 +4,8 @@ const rateLimit = require('express-rate-limit')
 const helmet = require('helmet')
 const mongoSanitize = require('express-mongo-sanitize')
 const xss = require('xss-clean')
-const session = require('express-session')
 const cookieParser = require('cookie-parser')
-const flash = require('connect-flash')
+const crypto = require('crypto')
 
 const path = require('path')
 
@@ -20,6 +19,57 @@ const errorController = require('./controllers/error')
 
 const app = express();
 
+// app.use(helmet.contentSecurityPolicy({
+//     directives: {
+//         defaultSrc: ["'self'"],
+//         scriptSrc: ["'self'", 'https://*.mapbox.com'],
+//         scriptSrc: ["'self'", 'https://*.cloudflare.com'],
+//         styleSrc: ["'self'", 'https://*.mapbox.com'],
+//         styleSrc: ["'self'", 'fonts.googleapis.com'],
+//         fontSrc: ["'self'", 'fonts.gstatic.com']
+//     }
+// }));
+
+// app.use(
+//   helmet.contentSecurityPolicy({
+//     directives: {
+//       defaultSrc: ["'self'", 'data:', 'blob:'],
+//       baseUri: ["'self'"],
+//       styleSrc: [
+//           "'self'",
+//           (req, res) => {
+//             res.styleNonce = crypto.randomBytes(16).toString("base64");
+//             return `'nonce-${res.styleNonce}'`;
+//           },
+//         ],
+//     styleSrc: ["'self'", 'fonts.googleapis.com'],
+//       scriptSrc: ["'self'", 'https://*.cloudflare.com'],
+//       scriptSrc: ["'self'", 'https://*.stripe.com'],
+//       scriptSrc: ["'self'", 'http:', 'https://*.mapbox.com', 'data:'],
+//       frameSrc: ["'self'", 'https://*.stripe.com'],
+//       objectSrc: ["'none'"],
+//       fontSrc: ["'self'", 'fonts.gstatic.com'],
+//       workerSrc: ["'self'", 'data:', 'blob:'],
+//       childSrc: ["'self'", 'blob:'],
+//       imgSrc: ["'self'", 'data:', 'blob:'],
+//       connectSrc: ["'self'", 'blob:', 'https://*.mapbox.com'],
+//       upgradeInsecureRequests: []
+//     },
+//     referrerPolicy: { policy: "same-origin" }
+//   })
+// );
+
+// app.use(helmet.contentSecurityPolicy({
+//     directives: {
+//       defaultSrc: ["'self'"],
+//       scriptSrc: [(req, res) => `'nonce-${res.locals.nonce}'`],
+//       scriptSrc: ["'self'", 'https://api.mapbox.com'],
+//       scriptSrc: ["'self'", 'cdnjs.cloudflare.com'],
+//       styleSrc: ["'self'", 'fonts.googleapis.com'],
+//       fontSrc: ["'self'", 'fonts.gstatic.com']
+//     },
+// }))
+
 // View engine
 app.set('view engine', 'pug')
 
@@ -27,10 +77,10 @@ app.set('view engine', 'pug')
 app.set('views', path.join(__dirname, 'views'))
 
 // Serving static files
+app.use(express.static(path.join(__dirname, 'dist')))
 app.use(express.static(path.join(__dirname, 'public')))
 
-// Set security HTTP headers
-app.use(helmet())
+
 
 //*** MIDDLEWARE ***
 // Development logging
@@ -45,12 +95,46 @@ const limiter = rateLimit({
     message: 'Request limit reached. Please try again in 1 hour.'
 })
 
+// Data sanitization against NoSQL query injection
+app.use(mongoSanitize())
+
+// Data sanitization again xss e.g <div id="attacks">Name</div>
+app.use(xss())
+
 app.use('/api', limiter)
 
 // Body parser, reading data from ody into req.body
 app.use(express.json({
     limit: '10kb'
 }));
+
+// Parse form data
+app.use(express.urlencoded({
+    extended: true,
+    limit: '10kb'
+}))
+
+// XSS
+app.use((req, res, next) => {   
+    res.locals.nonce = crypto.randomBytes(16).toString('base64')
+    next()
+})
+
+app.use(helmet.contentSecurityPolicy({
+    directives: {
+        defaultSrc: "'self'",
+        baseUri: ["'self'"],
+        scriptSrc: ["'self'", 'cdnjs.cloudflare.com', 'api.mapbox.com', (req, res) => `'nonce-${res.locals.nonce}'`],
+        styleSrc: ["'self'", 'fonts.googleapis.com', 'api.mapbox.com', (req, res) => `'nonce-${res.locals.nonce}'`],
+        fontSrc: ["'self'", 'fonts.gstatic.com'],
+        connectSrc: ["'self'", 'blob:', 'https://*.mapbox.com', 'ws://localhost:*'],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        workerSrc: ["'self'", 'data:', 'blob:'],
+        styleSrcAttr: ["'self'", (req, res) => `'nonce-${res.locals.nonce}'`],
+        
+    },
+    reportOnly: true
+}))
 
 // Cookie parser
 app.use(cookieParser())
@@ -70,14 +154,16 @@ app.use(cookieParser())
 //     next()
 // })
 
-// Data sanitization against NoSQL query injection
-app.use(mongoSanitize())
+// app.use((req, res, next) => {
+//   res.set(
+//     'Content-Security-Policy',
+//     "script-src 'self' https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js 'unsafe-inline' 'unsafe-eval';"
+//   );
+//   next();
+// });
 
-// Data sanitization again xss e.g <div id="attacks">Name</div>
-app.use(xss())
-
+// *************** TEST *****************
 app.use((req, res, next) => {   
-    console.log(req.cookies)
     next()
 })
 
